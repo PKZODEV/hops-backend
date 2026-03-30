@@ -22,7 +22,6 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 COPY prisma ./prisma
 
 # Uploads directory (will be mounted as volume)
@@ -31,4 +30,4 @@ RUN mkdir -p public/uploads
 EXPOSE 3001
 
 # Run migrations then start
-CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js migrate deploy && node dist/main"]
