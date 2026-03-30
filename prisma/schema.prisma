@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --------------------------------------------------------
+// Enums
+// --------------------------------------------------------
+
+enum PropertyType {
+  HOTEL
+  RESORT
+  GUESTHOUSE
+  VILLA
+  HOSTEL
+  VEHICLE_RENTAL
+  BUS_TRANSPORT
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  DISABLED
+}
+
+enum VehicleType {
+  CAR
+  VAN
+  MINIBUS
+  BUS
+  LOCAL
+  MOTORCYCLE
+  TUKTUK
+  BOAT
+  OTHER
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  BUSY
+  MAINTENANCE
+  DISABLED
+}
+
+enum VehicleOwnerType {
+  HOTEL        // ยานพาหนะของที่พักในระบบ
+  QUEUE_OWNER  // เจ้าของคิวรถ เช่น เจ๊อี๊ดคิวรถแดง คิวรถตู้
+  INDEPENDENT  // รถอิสระ / รถส่วนตัวรับจ้าง
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  STAFF
+}
+
+// --------------------------------------------------------
+// Models
+// --------------------------------------------------------
+
+/// ที่พัก (โรงแรม / รีสอร์ท / รถเช่า / รถโดยสาร ฯลฯ)
+model Property {
+  id          String       @id @default(cuid())
+  name        String
+  type        PropertyType @default(HOTEL)
+  description String?
+  address     String?
+  city        String?
+  country     String       @default("Thailand")
+  latitude    Float?
+  longitude   Float?
+  amenities   String[]     // e.g. ["wifi","parking","pool"]
+  images      String[]     // array of image URLs
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  buildings Building[]
+  roomTypes RoomType[]
+  vehicles  Vehicle[]
+}
+
+/// เจ้าของคิวรถ เช่น เจ๊อี๊ดคิวรถแดง คิวรถตู้ภูเก็ต สหกรณ์ฯลฯ
+model VehicleOwner {
+  id          String    @id @default(cuid())
+  name        String    // ชื่อคิว เช่น "เจ๊อี๊ดคิวรถแดง"
+  contactName String?   // ชื่อผู้ดูแล
+  phone       String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  vehicles Vehicle[]
+}
+
+/// อาคาร (Building A, Building B ...)
+model Building {
+  id         String   @id @default(cuid())
+  name       String
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  floors     Floor[]
+
+  @@index([propertyId])
+}
+
+/// ชั้น (Floor 1, Floor 2 ...)
+model Floor {
+  id         String   @id @default(cuid())
+  number     String   // "1", "2", "B1", "M"
+  buildingId String
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  roomUnits  RoomUnit[]
+
+  @@index([buildingId])
+}
+
+/// ประเภทห้องพัก (Standard, Deluxe, Suite ...)
+model RoomType {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  bedType     String?
+  maxGuests   Int
+  images      String[]
+  amenities   String[] // in-room amenities e.g. ["bathtub","wifi","tv"]
+  isActive    Boolean  @default(true)
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  roomUnits RoomUnit[]
+  rates     RoomRate[]
+
+  @@index([propertyId])
+}
+
+/// ห้องพักจริง (101, 102, 201A ...)
+model RoomUnit {
+  id         String     @id @default(cuid())
+  number     String
+  status     RoomStatus @default(AVAILABLE)
+  amenities  String[]
+  images     String[]
+  floorId    String
+  floor      Floor      @relation(fields: [floorId], references: [id])
+  roomTypeId String
+  roomType   RoomType   @relation(fields: [roomTypeId], references: [id])
+
+  @@index([floorId])
+  @@index([roomTypeId])
+}
+
+/// เรทราคาห้องพัก (Standard Rate / Weekend Rate / Early Bird ...)
+model RoomRate {
+  id         String    @id @default(cuid())
+  name       String
+  price      Decimal   @db.Decimal(10, 2)
+  currency   String    @default("THB")
+  startDate  DateTime?
+  endDate    DateTime?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  roomTypeId String
+  roomType   RoomType  @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+
+  @@index([roomTypeId])
+}
+
+/// ผู้ใช้ระบบ (Admin / Staff)
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  role         UserRole @default(ADMIN)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// ยานพาหนะและบริการรับส่ง (รถยนต์ รถตู้ รถแดง ตุ๊กตุ๊ก เรือ ...)
+model Vehicle {
+  id             String           @id @default(cuid())
+  name           String           // "รถแดง เชียงใหม่", "Toyota Commuter"
+  type           VehicleType
+  ownerType      VehicleOwnerType @default(HOTEL)
+  description    String?
+  licensePlate   String?          // ทะเบียนรถ
+  capacity       Int              @default(4)
+  status         VehicleStatus    @default(AVAILABLE)
+  images         String[]
+  features       String[]         // AC, WiFi, ที่นั่งเด็ก ...
+  pricePerTrip   Decimal?         @db.Decimal(10, 2)
+  pricePerHour   Decimal?         @db.Decimal(10, 2)
+  pricePerDay    Decimal?         @db.Decimal(10, 2)
+  route          String?          // เส้นทาง เช่น "เชียงใหม่ - ดอยสุเทพ"
+  driverName     String?
+  driverPhone    String?
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  propertyId     String?
+  property       Property?        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  vehicleOwnerId String?
+  vehicleOwner   VehicleOwner?    @relation(fields: [vehicleOwnerId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId])
+  @@index([vehicleOwnerId])
+}
