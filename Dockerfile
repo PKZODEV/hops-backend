@@ -15,13 +15,9 @@ WORKDIR /app
 
 RUN apk add --no-cache openssl
 
-COPY package*.json ./
-RUN npm ci --omit=dev --legacy-peer-deps
-
+# Copy full node_modules from builder (avoids devDep vs prod issues with NestJS)
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY prisma ./prisma
 
 # Uploads directory (will be mounted as volume)
