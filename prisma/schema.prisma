@@ -64,30 +64,44 @@ enum UserRole {
 // Models
 // --------------------------------------------------------
 
+/// ประเภทที่พัก (master data: โรงแรม, พูลวิลล่าห์, โฮมสเตย์ ...)
+model PropertyCategory {
+  id         String     @id @default(cuid())
+  name       String     @unique
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  properties Property[]
+}
+
 /// ที่พัก (โรงแรม / รีสอร์ท / รถเช่า / รถโดยสาร ฯลฯ)
 model Property {
-  id          String       @id @default(cuid())
-  userId      String
-  user        User         @relation(fields: [userId], references: [id])
-  name        String
-  type        PropertyType @default(HOTEL)
-  description String?
-  address     String?
-  city        String?
-  country     String       @default("Thailand")
-  latitude    Float?
-  longitude   Float?
-  amenities   String[]     // e.g. ["wifi","parking","pool"]
-  images      String[]     // array of image URLs
-  isActive    Boolean      @default(true)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                 String            @id @default(cuid())
+  userId             String
+  user               User              @relation(fields: [userId], references: [id])
+  propertyCategoryId String?
+  propertyCategory   PropertyCategory? @relation(fields: [propertyCategoryId], references: [id])
+  name               String
+  type               PropertyType      @default(HOTEL)
+  description        String?
+  address            String?
+  city               String?
+  country            String            @default("Thailand")
+  latitude           Float?
+  longitude          Float?
+  amenities          String[]          // e.g. ["wifi","parking","pool"]
+  images             String[]          // array of image URLs
+  isActive           Boolean           @default(true)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   buildings Building[]
   roomTypes RoomType[]
   vehicles  Vehicle[]
 
   @@index([userId])
+  @@index([propertyCategoryId])
 }
 
 /// เจ้าของคิวรถ เช่น เจ๊อี๊ดคิวรถแดง คิวรถตู้ภูเก็ต สหกรณ์ฯลฯ

@@ -65,4 +65,8 @@ export class CreatePropertyDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  propertyCategoryId?: string;
 }

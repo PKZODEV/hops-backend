@@ -32,6 +32,7 @@ export class PropertiesService {
     return this.prisma.property.findMany({
       where,
       include: {
+        propertyCategory: true,
         roomTypes: {
           where: { isActive: true },
           include: {
@@ -47,6 +48,7 @@ export class PropertiesService {
     const property = await this.prisma.property.findUnique({
       where: { id },
       include: {
+        propertyCategory: true,
         buildings: {
           include: {
             floors: {

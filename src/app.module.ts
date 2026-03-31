@@ -4,6 +4,7 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { PrismaModule } from './prisma/prisma.module';
 import { PropertiesModule } from './properties/properties.module';
+import { PropertyCategoriesModule } from './property-categories/property-categories.module';
 import { BuildingsModule } from './buildings/buildings.module';
 import { FloorsModule } from './floors/floors.module';
 import { RoomsModule } from './rooms/rooms.module';
@@ -27,6 +28,7 @@ import { VehicleOwnersModule } from './vehicle-owners/vehicle-owners.module';
     AuthModule,
     UsersModule,
     PropertiesModule,
+    PropertyCategoriesModule,
     BuildingsModule,
     FloorsModule,
     RoomsModule,
