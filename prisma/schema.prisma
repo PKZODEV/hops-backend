@@ -64,7 +64,7 @@ enum UserRole {
 // Models
 // --------------------------------------------------------
 
-/// ประเภทที่พัก (master data: โรงแรม, พูลวิลล่าห์, โฮมสเตย์ ...)
+/// ประเภทที่พัก (master data: โรงแรม, พูลวิลล่า, โฮมสเตย์ ...)
 model PropertyCategory {
   id         String     @id @default(cuid())
   name       String     @unique

@@ -25,6 +25,6 @@ ALTER TABLE "Property" ADD CONSTRAINT "Property_propertyCategoryId_fkey" FOREIGN
 INSERT INTO "PropertyCategory" ("id", "name", "isActive", "createdAt", "updatedAt")
 VALUES
   (gen_random_uuid()::text, 'โรงแรม', true, NOW(), NOW()),
-  (gen_random_uuid()::text, 'พูลวิลล่าห์', true, NOW(), NOW()),
+  (gen_random_uuid()::text, 'พูลวิลล่า', true, NOW(), NOW()),
   (gen_random_uuid()::text, 'โฮมสเตย์', true, NOW(), NOW())
 ON CONFLICT ("name") DO NOTHING;
