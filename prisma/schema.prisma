@@ -67,6 +67,8 @@ enum UserRole {
 /// ที่พัก (โรงแรม / รีสอร์ท / รถเช่า / รถโดยสาร ฯลฯ)
 model Property {
   id          String       @id @default(cuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
   name        String
   type        PropertyType @default(HOTEL)
   description String?
@@ -84,6 +86,8 @@ model Property {
   buildings Building[]
   roomTypes RoomType[]
   vehicles  Vehicle[]
+
+  @@index([userId])
 }
 
 /// เจ้าของคิวรถ เช่น เจ๊อี๊ดคิวรถแดง คิวรถตู้ภูเก็ต สหกรณ์ฯลฯ
@@ -176,14 +180,16 @@ model RoomRate {
 
 /// ผู้ใช้ระบบ (Admin / Staff)
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String     @id @default(cuid())
+  email        String     @unique
   name         String?
   passwordHash String
-  role         UserRole @default(ADMIN)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  role         UserRole   @default(ADMIN)
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  properties Property[]
 }
 
 /// ยานพาหนะและบริการรับส่ง (รถยนต์ รถตู้ รถแดง ตุ๊กตุ๊ก เรือ ...)

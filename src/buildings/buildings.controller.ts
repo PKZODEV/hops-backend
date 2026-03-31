@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body } from '@nestjs/common';
+import { Controller, Post, Patch, Delete, Param, Body } from '@nestjs/common';
 import { BuildingsService } from './buildings.service';
 import { CreateBuildingDto } from './dto/create-building.dto';
 import { UpdateBuildingDto } from './dto/update-building.dto';
@@ -7,13 +7,25 @@ import { UpdateBuildingDto } from './dto/update-building.dto';
 export class BuildingsController {
   constructor(private readonly buildingsService: BuildingsService) {}
 
-  // GET /api/v1/properties/:propertyId/buildings
-  @Get('properties/:propertyId/buildings')
-  findByProperty(@Param('propertyId') propertyId: string) {
-    return this.buildingsService.findByProperty(propertyId);
+  // POST /api/v1/buildings
+  @Post('buildings')
+  create(@Body() dto: CreateBuildingDto) {
+    return this.buildingsService.create(dto);
   }
 
-  // POST /api/v1/buildings
+  // PATCH /api/v1/buildings/:id
+  @Patch('buildings/:id')
+  update(@Param('id') id: string, @Body() dto: UpdateBuildingDto) {
+    return this.buildingsService.update(id, dto);
+  }
+
+  // DELETE /api/v1/buildings/:id
+  @Delete('buildings/:id')
+  remove(@Param('id') id: string) {
+    return this.buildingsService.remove(id);
+  }
+}
+
   @Post('buildings')
   create(@Body() dto: CreateBuildingDto) {
     return this.buildingsService.create(dto);
