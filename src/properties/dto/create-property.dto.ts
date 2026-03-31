@@ -40,6 +40,10 @@ export class CreatePropertyDto {
 
   @IsOptional()
   @IsString()
+  location?: string;
+
+  @IsOptional()
+  @IsString()
   country?: string;
 
   @IsOptional()

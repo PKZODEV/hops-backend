@@ -86,6 +86,7 @@ model Property {
   type               PropertyType      @default(HOTEL)
   description        String?
   address            String?
+  location           String?
   city               String?
   country            String            @default("Thailand")
   latitude           Float?
