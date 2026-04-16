@@ -1,14 +1,26 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
+
+interface AuthUser {
+  id: string;
+  role: UserRole;
+  vehicleOwnerId?: string | null;
+}
 
 @Injectable()
 export class TransportService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll() {
+  async findAll(_user: AuthUser, propertyId?: string) {
     return this.prisma.vehicle.findMany({
+      where: propertyId ? { propertyId } : undefined,
       include: {
         property: { select: { id: true, name: true } },
         vehicleOwner: { select: { id: true, name: true } },
@@ -17,22 +29,11 @@ export class TransportService {
     });
   }
 
-  async findByProperty(propertyId: string) {
-    return this.prisma.vehicle.findMany({
-      where: { propertyId },
-      include: {
-        property: { select: { id: true, name: true } },
-        vehicleOwner: { select: { id: true, name: true } },
-      },
-      orderBy: { name: 'asc' },
-    });
-  }
-
-  async findOne(id: string) {
+  async findOne(id: string, _user: AuthUser) {
     const vehicle = await this.prisma.vehicle.findUnique({
       where: { id },
       include: {
-        property: { select: { id: true, name: true, city: true } },
+        property: { select: { id: true, name: true, city: true, userId: true } },
         vehicleOwner: true,
       },
     });
@@ -40,14 +41,29 @@ export class TransportService {
     return vehicle;
   }
 
-  async create(dto: CreateVehicleDto) {
-    const { propertyId, vehicleOwnerId, pricePerTrip, pricePerHour, pricePerDay, ...data } = dto;
+  async create(dto: CreateVehicleDto, user: AuthUser) {
+    if (
+      user.role !== 'SUPER_ADMIN' &&
+      user.role !== 'ADMIN' &&
+      user.role !== 'HOTEL_OWNER' &&
+      user.role !== 'QUEUE_OWNER'
+    ) {
+      throw new ForbiddenException();
+    }
+
+    const {
+      propertyId,
+      vehicleOwnerId,
+      pricePerTrip,
+      pricePerHour,
+      pricePerDay,
+      ...data
+    } = dto;
 
     if (propertyId) {
       const property = await this.prisma.property.findUnique({ where: { id: propertyId } });
       if (!property) throw new NotFoundException(`Property #${propertyId} not found`);
     }
-
     if (vehicleOwnerId) {
       const owner = await this.prisma.vehicleOwner.findUnique({ where: { id: vehicleOwnerId } });
       if (!owner) throw new NotFoundException(`VehicleOwner #${vehicleOwnerId} not found`);
@@ -72,8 +88,8 @@ export class TransportService {
     });
   }
 
-  async update(id: string, dto: UpdateVehicleDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateVehicleDto, user: AuthUser) {
+    await this.findOne(id, user);
     const { propertyId, vehicleOwnerId, pricePerTrip, pricePerHour, pricePerDay, ...data } = dto;
     return this.prisma.vehicle.update({
       where: { id },
@@ -92,8 +108,8 @@ export class TransportService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, user: AuthUser) {
+    await this.findOne(id, user);
     return this.prisma.vehicle.delete({ where: { id } });
   }
 }

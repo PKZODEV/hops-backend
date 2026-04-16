@@ -58,6 +58,20 @@ enum UserRole {
   SUPER_ADMIN
   ADMIN
   STAFF
+  HOTEL_OWNER
+  QUEUE_OWNER
+  GUEST
+}
+
+enum RegistrationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RegistrationRole {
+  HOTEL_OWNER
+  QUEUE_OWNER
 }
 
 // --------------------------------------------------------
@@ -116,6 +130,7 @@ model VehicleOwner {
   updatedAt   DateTime  @updatedAt
 
   vehicles Vehicle[]
+  users    User[]
 }
 
 /// อาคาร (Building A, Building B ...)
@@ -193,18 +208,63 @@ model RoomRate {
   @@index([roomTypeId])
 }
 
-/// ผู้ใช้ระบบ (Admin / Staff)
+/// ผู้ใช้ระบบ (Admin / Staff / เจ้าของที่พัก / เจ้าของคิวรถ)
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  name         String?
-  passwordHash String
-  role         UserRole   @default(ADMIN)
-  isActive     Boolean    @default(true)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id                  String     @id @default(cuid())
+  email               String
+  name                String?
+  phone               String?
+  passwordHash        String
+  role                UserRole   @default(HOTEL_OWNER)
+  isActive            Boolean    @default(true)
+  mustChangePassword  Boolean    @default(false)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 
-  properties Property[]
+  properties     Property[]
+  vehicleOwnerId String?
+  vehicleOwner   VehicleOwner? @relation(fields: [vehicleOwnerId], references: [id])
+
+  @@unique([email, role])
+  @@index([vehicleOwnerId])
+}
+
+/// คำขอลงทะเบียนเข้าใช้ระบบ (รออนุมัติโดย SUPER_ADMIN)
+model RegistrationRequest {
+  id            String                    @id @default(cuid())
+  role          RegistrationRole
+  name          String
+  email         String
+  phone         String
+  businessName  String
+  address       String?
+  latitude      Float?
+  longitude     Float?
+  documents     Json                      // { type: url, ... }
+  status        RegistrationRequestStatus @default(PENDING)
+  rejectReason  String?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  reviewedAt    DateTime?
+  reviewedById  String?
+  createdUserId String?
+
+  @@index([status])
+  @@index([email])
+}
+
+/// OTP สำหรับยืนยันตัวตน (สมัครสมาชิก, ลืมรหัสผ่าน)
+model Otp {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  refCode   String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([refCode])
 }
 
 /// ยานพาหนะและบริการรับส่ง (รถยนต์ รถตู้ รถแดง ตุ๊กตุ๊ก เรือ ...)

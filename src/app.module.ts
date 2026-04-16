@@ -15,6 +15,8 @@ import { UsersModule } from './users/users.module';
 import { UploadModule } from './upload/upload.module';
 import { TransportModule } from './transport/transport.module';
 import { VehicleOwnersModule } from './vehicle-owners/vehicle-owners.module';
+import { MailModule } from './mail/mail.module';
+import { RegistrationRequestsModule } from './registration-requests/registration-requests.module';
 
 @Module({
   imports: [
@@ -25,6 +27,7 @@ import { VehicleOwnersModule } from './vehicle-owners/vehicle-owners.module';
       exclude: ['/api/(.*)'],
     }),
     PrismaModule,
+    MailModule,
     AuthModule,
     UsersModule,
     PropertiesModule,
@@ -37,6 +40,7 @@ import { VehicleOwnersModule } from './vehicle-owners/vehicle-owners.module';
     UploadModule,
     TransportModule,
     VehicleOwnersModule,
+    RegistrationRequestsModule,
   ],
 })
 export class AppModule {}

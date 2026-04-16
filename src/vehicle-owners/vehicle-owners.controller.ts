@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { VehicleOwnersService } from './vehicle-owners.service';
 import { CreateVehicleOwnerDto } from './dto/create-vehicle-owner.dto';
 import { UpdateVehicleOwnerDto } from './dto/update-vehicle-owner.dto';
@@ -10,27 +20,31 @@ export class VehicleOwnersController {
   constructor(private readonly service: VehicleOwnersService) {}
 
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(@Request() req: any) {
+    return this.service.findAll(req.user);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.service.findOne(id);
+  findOne(@Param('id') id: string, @Request() req: any) {
+    return this.service.findOne(id, req.user);
   }
 
   @Post()
-  create(@Body() dto: CreateVehicleOwnerDto) {
-    return this.service.create(dto);
+  create(@Body() dto: CreateVehicleOwnerDto, @Request() req: any) {
+    return this.service.create(dto, req.user);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateVehicleOwnerDto) {
-    return this.service.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateVehicleOwnerDto,
+    @Request() req: any,
+  ) {
+    return this.service.update(id, dto, req.user);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @Request() req: any) {
+    return this.service.remove(id, req.user);
   }
 }
