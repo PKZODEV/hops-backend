@@ -17,6 +17,10 @@ interface AuthUser {
 export class RoomsService {
   constructor(private prisma: PrismaService) {}
 
+  private canSeeAll(user: AuthUser): boolean {
+    return user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+  }
+
   async findByProperty(propertyId: string, user: AuthUser) {
     await this.ensurePropertyAccess(propertyId, user);
     return this.prisma.roomType.findMany({
@@ -42,7 +46,7 @@ export class RoomsService {
       },
     });
     if (!roomType) throw new NotFoundException(`Room type #${id} not found`);
-    if (user.role !== 'SUPER_ADMIN' && roomType.property.userId !== user.id) {
+    if (!this.canSeeAll(user) && roomType.property.userId !== user.id) {
       throw new ForbiddenException();
     }
     return roomType;
@@ -80,7 +84,7 @@ export class RoomsService {
       select: { id: true, userId: true },
     });
     if (!property) throw new NotFoundException(`Property #${id} not found`);
-    if (user.role !== 'SUPER_ADMIN' && property.userId !== user.id) {
+    if (!this.canSeeAll(user) && property.userId !== user.id) {
       throw new ForbiddenException();
     }
   }

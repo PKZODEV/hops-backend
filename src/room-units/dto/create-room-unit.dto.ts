@@ -2,7 +2,9 @@ import { IsString, IsOptional, IsArray, IsEnum } from 'class-validator';
 
 export enum RoomStatus {
   AVAILABLE = 'AVAILABLE',
+  RESERVED = 'RESERVED',
   OCCUPIED = 'OCCUPIED',
+  CLEANING = 'CLEANING',
   MAINTENANCE = 'MAINTENANCE',
   DISABLED = 'DISABLED',
 }

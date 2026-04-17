@@ -17,6 +17,7 @@ import { TransportModule } from './transport/transport.module';
 import { VehicleOwnersModule } from './vehicle-owners/vehicle-owners.module';
 import { MailModule } from './mail/mail.module';
 import { RegistrationRequestsModule } from './registration-requests/registration-requests.module';
+import { AmenitiesModule } from './amenities/amenities.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { RegistrationRequestsModule } from './registration-requests/registration
     TransportModule,
     VehicleOwnersModule,
     RegistrationRequestsModule,
+    AmenitiesModule,
   ],
 })
 export class AppModule {}

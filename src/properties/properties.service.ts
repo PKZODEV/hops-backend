@@ -19,9 +19,13 @@ interface AuthUser {
 export class PropertiesService {
   constructor(private prisma: PrismaService) {}
 
-  /** SUPER_ADMIN can see all; others see only their own. */
+  /** SUPER_ADMIN and ADMIN can see all; others see only their own. */
+  private canSeeAll(user: AuthUser): boolean {
+    return user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+  }
+
   private ownerScope(user: AuthUser): Prisma.PropertyWhereInput {
-    return user.role === 'SUPER_ADMIN' ? {} : { userId: user.id };
+    return this.canSeeAll(user) ? {} : { userId: user.id };
   }
 
   async findAll(query: QueryPropertyDto, user: AuthUser) {
@@ -87,7 +91,7 @@ export class PropertiesService {
       },
     });
     if (!property) throw new NotFoundException(`Property #${id} not found`);
-    if (user.role !== 'SUPER_ADMIN' && property.userId !== user.id) {
+    if (!this.canSeeAll(user) && property.userId !== user.id) {
       throw new ForbiddenException();
     }
     return property;

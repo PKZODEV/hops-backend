@@ -24,9 +24,16 @@ enum PropertyType {
 
 enum RoomStatus {
   AVAILABLE
+  RESERVED
   OCCUPIED
+  CLEANING
   MAINTENANCE
   DISABLED
+}
+
+enum AmenityType {
+  HOTEL
+  ROOM
 }
 
 enum VehicleType {
@@ -77,6 +84,21 @@ enum RegistrationRole {
 // --------------------------------------------------------
 // Models
 // --------------------------------------------------------
+
+/// สิ่งอำนวยความสะดวก (master data: Wi-Fi, สระว่ายน้ำ, อ่างอาบน้ำ ...)
+model Amenity {
+  id        String      @id @default(cuid())
+  name      String
+  icon      String?     // lucide-react icon name, e.g. "Wifi", "Waves"
+  type      AmenityType
+  isActive  Boolean     @default(true)
+  sortOrder Int         @default(0)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([name, type])
+  @@index([type])
+}
 
 /// ประเภทที่พัก (master data: โรงแรม, พูลวิลล่า, โฮมสเตย์ ...)
 model PropertyCategory {
