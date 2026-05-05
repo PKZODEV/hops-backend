@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
+import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
@@ -15,6 +17,8 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { GuestRegisterDto } from './dto/guest-register.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -23,6 +27,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private mail: MailService,
+    private config: ConfigService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -222,6 +227,79 @@ export class AuthService {
         phone: user.phone,
       },
     };
+  }
+
+  // ==================== FORGOT / RESET PASSWORD (Admin) ====================
+
+  async forgotPassword(dto: ForgotPasswordDto) {
+    // หา user ที่ไม่ใช่ GUEST (admin side) — ถ้ามีหลาย role ให้เลือกอันแรก
+    const user = await this.prisma.user.findFirst({
+      where: {
+        email: dto.email,
+        role: { not: 'GUEST' },
+        isActive: true,
+      },
+    });
+
+    // ไม่เจอก็ตอบเหมือนเจอเพื่อไม่ให้ leak ข้อมูลว่าอีเมลไหนมีในระบบ
+    if (!user) {
+      return { ok: true };
+    }
+
+    // ยกเลิก token เก่าที่ยังไม่ใช้
+    await this.prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, used: false },
+      data: { used: true },
+    });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        token,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 ชั่วโมง
+      },
+    });
+
+    const appUrl =
+      this.config.get<string>('APP_URL') ?? 'http://119.59.116.75';
+    const resetLink = `${appUrl}/reset-password?token=${token}`;
+
+    await this.mail.sendPasswordResetEmail({
+      to: user.email,
+      name: user.name ?? user.email,
+      resetLink,
+    });
+
+    return { ok: true };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const record = await this.prisma.passwordResetToken.findUnique({
+      where: { token: dto.token },
+      include: { user: true },
+    });
+
+    if (!record || record.used) {
+      throw new BadRequestException('ลิงก์ไม่ถูกต้องหรือถูกใช้ไปแล้ว');
+    }
+    if (record.expiresAt < new Date()) {
+      throw new BadRequestException('ลิงก์หมดอายุแล้ว กรุณาขอใหม่อีกครั้ง');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 12);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: record.userId },
+        data: { passwordHash, mustChangePassword: false },
+      }),
+      this.prisma.passwordResetToken.update({
+        where: { id: record.id },
+        data: { used: true },
+      }),
+    ]);
+
+    return { ok: true };
   }
 
   async resendOtp(dto: ResendOtpDto) {

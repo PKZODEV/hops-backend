@@ -81,6 +81,26 @@ enum RegistrationRole {
   QUEUE_OWNER
 }
 
+enum BookingStatus {
+  PENDING                     // รอชำระเงิน
+  AWAITING_ROOM_ASSIGNMENT    // รอเจ้าหน้าที่ระบุห้องพัก (ใหม่)
+  CONFIRMED                   // ยืนยันแล้ว / รอเช็คอิน
+  CHECKED_IN                  // เช็คอินแล้ว / กำลังเข้าพัก
+  CHECKOUT_PENDING            // รอ admin อนุมัติเช็คเอาท์ (ใหม่)
+  AWAITING_EXTRA_PAYMENT      // รอลูกค้าชำระค่าใช้จ่ายเพิ่มเติม (ใหม่)
+  CHECKED_OUT                 // เช็คเอาท์แล้ว / สำเร็จ
+  CANCELLED                   // ยกเลิก
+  REFUNDED                    // คืนเงินแล้ว
+  NO_SHOW                     // ไม่มาเข้าพัก
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+  FAILED
+}
+
 // --------------------------------------------------------
 // Models
 // --------------------------------------------------------
@@ -130,12 +150,16 @@ model Property {
   amenities          String[]          // e.g. ["wifi","parking","pool"]
   images             String[]          // array of image URLs
   isActive           Boolean           @default(true)
+  /// % บวกราคาเพิ่มจากราคาที่เจ้าของโรงแรมตั้ง (ตั้งโดย admin) — 0..100
+  markupPercentage   Float             @default(0)
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
   buildings Building[]
   roomTypes RoomType[]
   vehicles  Vehicle[]
+  bookings  Booking[]
+  reviews   Review[]
 
   @@index([userId])
   @@index([propertyCategoryId])
@@ -192,6 +216,7 @@ model RoomType {
 
   roomUnits RoomUnit[]
   rates     RoomRate[]
+  bookings  Booking[]
 
   @@index([propertyId])
 }
@@ -207,6 +232,8 @@ model RoomUnit {
   floor      Floor      @relation(fields: [floorId], references: [id])
   roomTypeId String
   roomType   RoomType   @relation(fields: [roomTypeId], references: [id])
+
+  bookings   Booking[]
 
   @@index([floorId])
   @@index([roomTypeId])
@@ -247,8 +274,24 @@ model User {
   vehicleOwnerId String?
   vehicleOwner   VehicleOwner? @relation(fields: [vehicleOwnerId], references: [id])
 
+  passwordResetTokens PasswordResetToken[]
+
   @@unique([email, role])
   @@index([vehicleOwnerId])
+}
+
+/// Token สำหรับ reset รหัสผ่าน (ลืมรหัสผ่าน)
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
 }
 
 /// คำขอลงทะเบียนเข้าใช้ระบบ (รออนุมัติโดย SUPER_ADMIN)
@@ -319,4 +362,109 @@ model Vehicle {
 
   @@index([propertyId])
   @@index([vehicleOwnerId])
+}
+
+/// ค่าใช้จ่ายเพิ่มเติมตอนเช็คเอาท์ (เช่น มินิบาร์, ค่าซักรีด)
+model BookingExtraCharge {
+  id        String   @id @default(cuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  name      String
+  amount    Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+
+  @@index([bookingId])
+}
+
+/// รีวิวที่พัก (จาก guest หลังเช็คเอาท์)
+model Review {
+  id           String   @id @default(cuid())
+  bookingId    String   @unique
+  booking      Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  propertyId   String
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  rating       Int      // 1-5
+  comment      String?
+  guestName    String
+  createdAt    DateTime @default(now())
+
+  @@index([propertyId])
+  @@index([rating])
+}
+
+/// การจองห้องพัก (Booking) — สร้างจากแอปมือถือ, จัดการจาก admin panel
+model Booking {
+  id             String        @id @default(cuid())
+  bookingCode    String        @unique // human-friendly code, e.g. HP-AB12CD
+
+  /// ที่พัก (Property — denormalized for easy filtering)
+  propertyId     String
+  property       Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  /// ประเภทห้อง / Room type ที่จอง
+  roomTypeId     String
+  roomType       RoomType      @relation(fields: [roomTypeId], references: [id])
+
+  /// ห้องจริงที่ assign (จะ assign ตอน check-in หรือก่อนหน้า)
+  roomUnitId     String?
+  roomUnit       RoomUnit?     @relation(fields: [roomUnitId], references: [id])
+
+  /// ข้อมูลผู้เข้าพัก (จากฟอร์ม mobile)
+  guestFirstName String
+  guestLastName  String
+  guestEmail     String
+  guestPhone     String
+  guestCount     Int           @default(2)
+  specialRequest String?
+
+  /// วันที่เข้าพัก
+  checkInDate    DateTime      @db.Date
+  checkOutDate   DateTime      @db.Date
+  nights         Int
+
+  /// ราคา (snapshot ของราคาตอนจอง)
+  pricePerNight  Decimal       @db.Decimal(10, 2)
+  totalAmount    Decimal       @db.Decimal(10, 2)
+  currency       String        @default("THB")
+
+  /// ผู้ให้บริการ (Hops, traveloka, agoda, ...) — store as plain string
+  provider       String        @default("Hops")
+
+  /// สถานะ
+  status         BookingStatus @default(PENDING)
+  paymentStatus  PaymentStatus @default(PENDING)
+
+  /// เช็คอิน / เช็คเอาท์ จริง (ถ้าทำผ่าน admin)
+  checkedInAt    DateTime?
+  checkedOutAt   DateTime?
+
+  /// ยกเลิก / คืนเงิน
+  cancelledAt    DateTime?
+  cancelReason   String?
+  refundedAt     DateTime?
+  refundAmount   Decimal?      @db.Decimal(10, 2)
+
+  /// staff ที่ทำรายการ (ถ้าทำจาก admin)
+  handledById    String?
+
+  /// คำขอเช็คเอาท์ (ส่งจาก mobile)
+  checkoutRequestedAt DateTime?
+
+  /// ค่าใช้จ่ายเพิ่มเติมตอนเช็คเอาท์ (ถ้ามี)
+  extraCharges        BookingExtraCharge[]
+  extraChargesTotal   Decimal?  @db.Decimal(10, 2)
+  extraChargesPaidAt  DateTime?
+
+  review         Review?
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([propertyId])
+  @@index([roomTypeId])
+  @@index([roomUnitId])
+  @@index([status])
+  @@index([checkInDate])
+  @@index([checkOutDate])
+  @@index([guestEmail])
 }

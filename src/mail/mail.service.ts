@@ -92,6 +92,35 @@ export class MailService {
     await this.send(to, subject, html);
   }
 
+  async sendPasswordResetEmail(args: {
+    to: string;
+    name: string;
+    resetLink: string;
+  }) {
+    const { to, name, resetLink } = args;
+    const subject = 'HOPS - คำร้องขอเปลี่ยนรหัสผ่าน';
+    const html = `
+      <div style="font-family:sans-serif;color:#1f2937;line-height:1.6;max-width:560px;">
+        <h2 style="color:#2FA6A8;">คำร้องขอเปลี่ยนรหัสผ่าน</h2>
+        <p>เรียน คุณ${name}</p>
+        <p>เราได้รับคำร้องขอเปลี่ยนรหัสผ่านสำหรับบัญชี HOPS ของท่าน</p>
+        <p>กรุณากดที่ปุ่มด้านล่างนี้เพื่อตั้งรหัสผ่านใหม่ของท่าน:</p>
+        <div style="text-align:center;margin:28px 0;">
+          <a href="${resetLink}"
+             style="background:#2FA6A8;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:bold;display:inline-block;">
+            ตั้งรหัสผ่านใหม่
+          </a>
+        </div>
+        <p style="color:#6b7280;font-size:13px;">หากปุ่มด้านบนกดไม่ได้ ให้คัดลอกลิงก์นี้ไปเปิดในเบราว์เซอร์:</p>
+        <p style="word-break:break-all;font-size:13px;"><a href="${resetLink}" style="color:#2FA6A8;">${resetLink}</a></p>
+        <p style="color:#6b7280;font-size:13px;">ลิงก์นี้จะหมดอายุภายใน 1 ชั่วโมง และใช้ได้เพียงครั้งเดียว</p>
+        <p style="color:#dc2626;font-size:13px;"><strong>หากท่านไม่ได้ทำรายการนี้</strong> กรุณาเพิกเฉยอีเมลฉบับนี้ รหัสผ่านของท่านจะไม่มีการเปลี่ยนแปลง</p>
+        <p>ขอแสดงความนับถือ<br/>ทีมงาน HOPS</p>
+      </div>
+    `;
+    await this.send(to, subject, html);
+  }
+
   async sendRejectionEmail(args: { to: string; name: string; reason?: string }) {
     const { to, name, reason } = args;
     const subject = 'คำขอลงทะเบียน HOPS ของคุณ';

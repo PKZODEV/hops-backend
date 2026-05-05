@@ -44,6 +44,12 @@ export class RatesService {
     });
   }
 
+  async remove(id: string) {
+    await this.ensureRateExists(id);
+    await this.prisma.roomRate.delete({ where: { id } });
+    return { id };
+  }
+
   private async ensureRoomTypeExists(id: string) {
     const roomType = await this.prisma.roomType.findUnique({ where: { id } });
     if (!roomType) throw new NotFoundException(`Room type #${id} not found`);

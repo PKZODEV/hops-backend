@@ -16,6 +16,8 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { GuestRegisterDto } from './dto/guest-register.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 const COOKIE_OPTIONS = {
@@ -63,6 +65,20 @@ export class AuthController {
     @Body() dto: ChangePasswordDto,
   ) {
     return this.auth.changePassword(req.user.id, dto);
+  }
+
+  // ==================== FORGOT / RESET PASSWORD ====================
+
+  @Post('forgot-password')
+  @HttpCode(200)
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.auth.forgotPassword(dto);
+  }
+
+  @Post('reset-password')
+  @HttpCode(200)
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.auth.resetPassword(dto);
   }
 
   // ==================== GUEST AUTH (Mobile) ====================

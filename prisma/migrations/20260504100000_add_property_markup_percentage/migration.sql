@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Property" ADD COLUMN "markupPercentage" DOUBLE PRECISION NOT NULL DEFAULT 0;

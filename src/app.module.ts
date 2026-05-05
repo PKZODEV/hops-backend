@@ -18,6 +18,7 @@ import { VehicleOwnersModule } from './vehicle-owners/vehicle-owners.module';
 import { MailModule } from './mail/mail.module';
 import { RegistrationRequestsModule } from './registration-requests/registration-requests.module';
 import { AmenitiesModule } from './amenities/amenities.module';
+import { BookingsModule } from './bookings/bookings.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { AmenitiesModule } from './amenities/amenities.module';
     VehicleOwnersModule,
     RegistrationRequestsModule,
     AmenitiesModule,
+    BookingsModule,
   ],
 })
 export class AppModule {}

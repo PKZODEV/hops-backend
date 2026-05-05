@@ -5,6 +5,8 @@ import {
   IsArray,
   IsEnum,
   IsNumber,
+  Min,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -73,4 +75,11 @@ export class CreatePropertyDto {
   @IsOptional()
   @IsString()
   propertyCategoryId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  @Type(() => Number)
+  markupPercentage?: number;
 }

@@ -48,7 +48,7 @@ export class PropertiesService {
       ];
     }
 
-    return this.prisma.property.findMany({
+    const properties = await this.prisma.property.findMany({
       where,
       include: {
         propertyCategory: true,
@@ -60,6 +60,31 @@ export class PropertiesService {
         },
       },
       orderBy: { createdAt: 'desc' },
+    });
+
+    const ids = properties.map((p) => p.id);
+    const aggregates = ids.length
+      ? await this.prisma.review.groupBy({
+          by: ['propertyId'],
+          where: { propertyId: { in: ids } },
+          _avg: { rating: true },
+          _count: { _all: true },
+        })
+      : [];
+    const aggMap = new Map<string, { avg: number | null; count: number }>();
+    for (const a of aggregates) {
+      aggMap.set(a.propertyId, {
+        avg: a._avg.rating ?? null,
+        count: a._count._all,
+      });
+    }
+    return properties.map((p) => {
+      const a = aggMap.get(p.id);
+      return {
+        ...p,
+        ratingAverage: a?.avg ?? null,
+        reviewCount: a?.count ?? 0,
+      };
     });
   }
 
@@ -133,6 +158,108 @@ export class PropertiesService {
       where: { id },
       data: dto,
     });
+  }
+
+  /** Public listing — no auth required, returns active properties only with min relations + base price. */
+  async findAllPublic(query: QueryPropertyDto) {
+    const where: Prisma.PropertyWhereInput = { isActive: true };
+    if (query.type) where.type = query.type;
+    if (query.city) where.city = { contains: query.city, mode: 'insensitive' };
+    if (query.search) {
+      where.OR = [
+        { name: { contains: query.search, mode: 'insensitive' } },
+        { city: { contains: query.search, mode: 'insensitive' } },
+        { address: { contains: query.search, mode: 'insensitive' } },
+        { location: { contains: query.search, mode: 'insensitive' } },
+        { description: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+    const properties = await this.prisma.property.findMany({
+      where,
+      include: {
+        propertyCategory: { select: { id: true, name: true } },
+        roomTypes: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            name: true,
+            maxGuests: true,
+            rates: {
+              where: { isActive: true },
+              orderBy: { price: 'asc' },
+              take: 1,
+              select: { id: true, price: true },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // attach review aggregates
+    const ids = properties.map((p) => p.id);
+    const aggregates = ids.length
+      ? await this.prisma.review.groupBy({
+          by: ['propertyId'],
+          where: { propertyId: { in: ids } },
+          _avg: { rating: true },
+          _count: { _all: true },
+        })
+      : [];
+    const aggMap = new Map<
+      string,
+      { avg: number | null; count: number }
+    >();
+    for (const a of aggregates) {
+      aggMap.set(a.propertyId, {
+        avg: a._avg.rating ?? null,
+        count: a._count._all,
+      });
+    }
+    return properties.map((p) => {
+      const a = aggMap.get(p.id);
+      return {
+        ...p,
+        ratingAverage: a?.avg ?? null,
+        reviewCount: a?.count ?? 0,
+      };
+    });
+  }
+
+  async findOnePublic(id: string) {
+    const property = await this.prisma.property.findFirst({
+      where: { id, isActive: true },
+      include: {
+        propertyCategory: { select: { id: true, name: true } },
+        buildings: {
+          include: {
+            floors: {
+              include: { roomUnits: { include: { roomType: true } } },
+              orderBy: { number: 'asc' },
+            },
+          },
+          orderBy: { name: 'asc' },
+        },
+        roomTypes: {
+          where: { isActive: true },
+          include: {
+            rates: { where: { isActive: true }, orderBy: { price: 'asc' } },
+          },
+        },
+      },
+    });
+    if (!property) throw new NotFoundException(`Property #${id} not found`);
+
+    const agg = await this.prisma.review.aggregate({
+      where: { propertyId: property.id },
+      _avg: { rating: true },
+      _count: { _all: true },
+    });
+    return {
+      ...property,
+      ratingAverage: agg._avg.rating ?? null,
+      reviewCount: agg._count._all,
+    };
   }
 
   async getStats(propertyId: string, user: AuthUser) {
