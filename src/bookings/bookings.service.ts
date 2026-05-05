@@ -31,7 +31,12 @@ export class BookingsService {
     return user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
   }
 
-  /// HOTEL_OWNER เห็นเฉพาะ booking ของ property ที่ตัวเองเป็นเจ้าของ
+  /**
+   * Returns a Prisma where-clause that constrains queries to the
+   * properties this user is allowed to see. Super admins and platform
+   * admins see everything; HOTEL_OWNER is scoped to the properties they
+   * own.
+   */
   private async ownerScope(user: AuthUser): Promise<Prisma.BookingWhereInput> {
     if (this.canSeeAll(user)) return {};
     const props = await this.prisma.property.findMany({
@@ -50,13 +55,19 @@ export class BookingsService {
     return `HP-${s}`;
   }
 
-  /// Public endpoint — guest จาก mobile สร้าง booking โดยไม่ต้อง auth
+  /**
+   * Public booking entry-point used by the mobile guest flow. Performed
+   * without authentication because the guest does not yet have an
+   * account; abuse is mitigated by the global rate limiter.
+   */
   async createPublic(dto: CreateBookingDto) {
     return this.createBooking(dto);
   }
 
   private async createBooking(dto: CreateBookingDto) {
-    // ตรวจ roomType + ดึง propertyId
+    /* Resolve the room-type to confirm it exists and to derive the
+       parent propertyId (the booking is linked to the property, not the
+       individual unit, until an admin assigns a unit). */
     const roomType = await this.prisma.roomType.findUnique({
       where: { id: dto.roomTypeId },
       include: { property: true },
@@ -76,7 +87,8 @@ export class BookingsService {
     const nights = Math.max(1, Math.round(ms / (1000 * 60 * 60 * 24)));
     const totalAmount = Number(dto.pricePerNight) * nights;
 
-    // ตรวจสอบว่ามีห้องว่างอย่างน้อย 1 ห้องในประเภทนี้ก่อน
+    /* Reject the request up front if no unit of this type is free; the
+       admin assigns the actual unit later. */
     const availableCount = await this.prisma.roomUnit.count({
       where: { roomTypeId: dto.roomTypeId, status: RoomStatus.AVAILABLE },
     });
@@ -85,7 +97,8 @@ export class BookingsService {
         'ห้องประเภทนี้ไม่มีห้องว่างแล้ว กรุณาเลือกประเภทอื่น',
       );
     }
-    // ถ้า client ส่ง roomUnitId มา (legacy) ตรวจว่ายังว่าง
+    /* Legacy clients may still pass an explicit roomUnitId; honour it
+       only if the unit belongs to the requested type and is free. */
     if (dto.roomUnitId) {
       const unit = await this.prisma.roomUnit.findUnique({
         where: { id: dto.roomUnitId },
@@ -99,7 +112,9 @@ export class BookingsService {
       }
     }
 
-    // ลองสร้าง bookingCode (retry หาก unique ชน — ไม่น่าจะเกิดบ่อย)
+    /* The booking code is randomly generated and must be unique; on
+       the rare collision (P2002) we retry with a fresh code rather
+       than failing the request. */
     let attempts = 0;
     let booking = null;
     while (attempts < 5) {
@@ -110,7 +125,6 @@ export class BookingsService {
             bookingCode: code,
             propertyId: roomType.propertyId,
             roomTypeId: dto.roomTypeId,
-            // ไม่ assign roomUnit ตอนสร้าง — admin จะ assign หลังจาก approve
             guestFirstName: dto.guestFirstName,
             guestLastName: dto.guestLastName,
             guestEmail: dto.guestEmail,
@@ -197,7 +211,8 @@ export class BookingsService {
         default:
           break;
       }
-      // suppress unused-var warning
+      /* `today` is referenced in some branches above; keep the binding
+         live so the compiler does not flag it as unused. */
       void today;
     }
 
@@ -213,7 +228,10 @@ export class BookingsService {
     });
   }
 
-  /// Public lookup — สำหรับ mobile ดึงรายการโดยใช้ guestEmail (ยังไม่มี user account)
+  /**
+   * Looks up bookings owned by a guest email. Used by the mobile app
+   * because guest accounts may not exist yet at the time of booking.
+   */
   async findByGuestEmail(email: string, group?: string) {
     const where: Prisma.BookingWhereInput = { guestEmail: email };
     if (group) {
@@ -310,7 +328,8 @@ export class BookingsService {
     });
     if (!booking) throw new NotFoundException('ไม่พบการจอง');
 
-    // resolve amenity ids → master records (name, icon, type)
+    /* Resolve stored amenity ids back to master records so we can
+       return the human-readable name and icon to the client. */
     const allIds = Array.from(
       new Set([
         ...(booking.property?.amenities ?? []),
@@ -326,7 +345,8 @@ export class BookingsService {
       });
       records.forEach((r) => {
         resolved[r.id] = { id: r.id, name: r.name, icon: r.icon, type: r.type };
-        // also index by name (in case stored as name)
+        /* Some legacy rows store the amenity by name rather than id; index
+           by both so the lookup below resolves either shape. */
         resolved[r.name] = { id: r.id, name: r.name, icon: r.icon, type: r.type };
       });
     }
@@ -367,7 +387,11 @@ export class BookingsService {
     return booking;
   }
 
-  /// Self check-in จาก mobile (ไม่มี auth) — ใช้ bookingCode หรือ booking id
+  /**
+   * Mobile self check-in. Accepts either the booking id or the
+   * human-friendly booking code. Performed without authentication;
+   * possession of the booking code is treated as proof of ownership.
+   */
   async selfCheckIn(idOrCode: string) {
     const booking = await this.prisma.booking.findFirst({
       where: { OR: [{ id: idOrCode }, { bookingCode: idOrCode }] },
@@ -389,7 +413,9 @@ export class BookingsService {
       );
     }
 
-    // ต้องถึงวันที่จองแล้วถึงจะเช็คอินได้ (เปรียบเทียบเป็น date-only ใน timezone Asia/Bangkok)
+    /* Block check-in before the booked arrival date. Compared as
+       date-only in Asia/Bangkok so a guest in Thailand sees the same
+       day as the operator. */
     const tzOffsetMs = 7 * 60 * 60 * 1000;
     const todayBkk = new Date(Date.now() + tzOffsetMs)
       .toISOString()
@@ -555,7 +581,11 @@ export class BookingsService {
     });
   }
 
-  /// Mobile ส่งคำขอเช็คเอาท์ — ยังไม่ออก รอ admin อนุมัติ
+  /**
+   * Guest-initiated checkout request. Marks the booking as pending so
+   * the operator can finalise the room and any extra charges before
+   * the guest is officially checked out.
+   */
   async requestCheckout(idOrCode: string) {
     const booking = await this.prisma.booking.findFirst({
       where: { OR: [{ id: idOrCode }, { bookingCode: idOrCode }] },
@@ -579,7 +609,11 @@ export class BookingsService {
     });
   }
 
-  /// Mobile ชำระค่าใช้จ่ายเพิ่มเติม → CHECKED_OUT
+  /**
+   * Guest pays the outstanding extra charges from the mobile app.
+   * Transitions the booking from AWAITING_EXTRA_PAYMENT to
+   * CHECKED_OUT and frees the room unit.
+   */
   async payExtraCharges(idOrCode: string) {
     const booking = await this.prisma.booking.findFirst({
       where: { OR: [{ id: idOrCode }, { bookingCode: idOrCode }] },
@@ -614,7 +648,11 @@ export class BookingsService {
     });
   }
 
-  /// Admin assign room → AWAITING_ROOM_ASSIGNMENT → CONFIRMED + ห้อง RESERVED
+  /**
+   * Admin assigns a specific room unit to the booking. Moves the
+   * booking from AWAITING_ROOM_ASSIGNMENT to CONFIRMED and reserves
+   * the unit so it cannot be double-booked.
+   */
   async assignRoom(id: string, roomUnitId: string, user: AuthUser) {
     const current = await this.assertCanManage(id, user);
     if (current.status !== BookingStatus.AWAITING_ROOM_ASSIGNMENT) {
@@ -659,7 +697,11 @@ export class BookingsService {
     });
   }
 
-  /// Admin อนุมัติเช็คเอาท์ พร้อม optional extra charges
+  /**
+   * Admin-side checkout. Optionally attaches extra charges; if any are
+   * present the booking moves to AWAITING_EXTRA_PAYMENT instead of
+   * CHECKED_OUT until the guest pays.
+   */
   async approveCheckout(
     id: string,
     extras: { name: string; amount: number }[] | undefined,
@@ -674,11 +716,12 @@ export class BookingsService {
     );
 
     return this.prisma.$transaction(async (tx) => {
-      // ลบ extras เดิม (ถ้ามี) แล้วใส่ใหม่
+      /* Replace any previous extras for this booking with the supplied
+         set so the operator can correct mistakes before checkout. */
       await tx.bookingExtraCharge.deleteMany({ where: { bookingId: id } });
 
       if (validExtras.length === 0) {
-        // ไม่มีค่าเพิ่ม → CHECKED_OUT เลย + room AVAILABLE
+        /* No extras: complete the checkout in-line and free the room. */
         const updated = await tx.booking.update({
           where: { id },
           data: {
@@ -703,7 +746,8 @@ export class BookingsService {
         return updated;
       }
 
-      // มีค่าเพิ่ม → AWAITING_EXTRA_PAYMENT
+      /* Extras present: hold the booking in AWAITING_EXTRA_PAYMENT
+         until the guest settles them from the mobile app. */
       await tx.bookingExtraCharge.createMany({
         data: validExtras.map((e) => ({
           bookingId: id,
@@ -729,7 +773,10 @@ export class BookingsService {
     });
   }
 
-  /// ย้อนสถานะ CHECKED_IN กลับเป็น CONFIRMED (กรณี check-in ผิด)
+  /**
+   * Reverses an erroneous check-in: returns the booking to CONFIRMED
+   * and the room unit to its previous state.
+   */
   async revertCheckIn(id: string, user: AuthUser) {
     const current = await this.assertCanManage(id, user);
     if (current.status !== BookingStatus.CHECKED_IN) {
@@ -778,7 +825,7 @@ export class BookingsService {
     });
   }
 
-  /// Public submit review (จาก mobile หลังเช็คเอาท์)
+  /** Public review submission. Allowed only after the booking is checked out. */
   async submitReview(
     idOrCode: string,
     dto: { rating: number; comment?: string },

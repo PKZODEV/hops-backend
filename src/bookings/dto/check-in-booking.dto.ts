@@ -1,7 +1,7 @@
 import { IsOptional, IsString } from 'class-validator';
 
 export class CheckInBookingDto {
-  /// (optional) RoomUnit ที่จะ assign ตอน check-in (ถ้ายังไม่ได้ assign)
+  /** Optional. Assigns this room unit at check-in if one was not already assigned. */
   @IsOptional()
   @IsString()
   roomUnitId?: string;

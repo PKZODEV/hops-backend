@@ -1,4 +1,19 @@
 node_modules/
 dist/
-.env
 *.js.map
+
+# env files
+# Committed templates (safe to track, hold no secrets):
+#   .env.example                  documents every required variable
+#   .env.development              local-dev defaults (no real secrets)
+#   .env.production.example       production template (empty secrets)
+# Per-developer overrides (.local) and the populated production env file
+# must NOT be committed.
+.env
+.env.production
+.env.local
+.env.*.local
+
+# user-uploaded files (mounted as a volume in production)
+public/uploads/*
+!public/uploads/.gitkeep

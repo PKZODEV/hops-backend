@@ -44,7 +44,9 @@ export class RegistrationRequestsService {
       throw new BadRequestException('คำขอนี้ถูกพิจารณาไปแล้ว');
     }
 
-    // Make sure email+role is still free
+    /* Re-check the email+role uniqueness here because another admin
+       may have approved a colliding request between the moment this
+       request was created and the moment it is now being approved. */
     const role: UserRole = req.role === 'HOTEL_OWNER' ? 'HOTEL_OWNER' : 'QUEUE_OWNER';
     const existing = await this.prisma.user.findUnique({
       where: { email_role: { email: req.email, role } },
@@ -64,7 +66,9 @@ export class RegistrationRequestsService {
       mustChangePassword: true,
     });
 
-    // For HOTEL_OWNER, pre-create their hotel property
+    /* Approving a HOTEL_OWNER also creates the empty property record
+       so the operator can finish onboarding via the setup wizard
+       without an extra round-trip. */
     if (req.role === 'HOTEL_OWNER') {
       await this.prisma.property.create({
         data: {

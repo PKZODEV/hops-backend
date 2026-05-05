@@ -9,11 +9,11 @@ import {
 } from 'class-validator';
 
 export class CreateBookingDto {
-  /// ID ของ RoomType ที่จอง
+  /** Identifier of the room type being booked. */
   @IsString()
   roomTypeId: string;
 
-  /// (optional) RoomUnit ที่ต้องการ — ถ้าไม่ส่ง ระบบจะ assign ตอน check-in
+  /** Optional preferred room unit. If omitted the admin assigns one at check-in. */
   @IsOptional()
   @IsString()
   roomUnitId?: string;

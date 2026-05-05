@@ -21,15 +21,13 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 
-  // ---------- Public endpoints (mobile app, no auth) ----------
+  /* ──────────────── Public endpoints (mobile, no auth) ──────────────── */
 
-  // POST /api/v1/bookings/public — สร้าง booking จาก mobile หลังกดชำระเงิน
   @Post('public')
   createPublic(@Body() dto: CreateBookingDto) {
     return this.bookingsService.createPublic(dto);
   }
 
-  // GET /api/v1/bookings/public/by-email?email=xxx&group=arriving
   @Get('public/by-email')
   findByGuestEmail(
     @Query('email') email: string,
@@ -38,31 +36,26 @@ export class BookingsController {
     return this.bookingsService.findByGuestEmail(email, group);
   }
 
-  // GET /api/v1/bookings/public/:idOrCode — ดูรายละเอียด (สำหรับ mobile)
   @Get('public/:idOrCode')
   findOnePublic(@Param('idOrCode') idOrCode: string) {
     return this.bookingsService.findOnePublic(idOrCode);
   }
 
-  // PATCH /api/v1/bookings/public/:idOrCode/check-in — self check-in จาก mobile
   @Patch('public/:idOrCode/check-in')
   selfCheckIn(@Param('idOrCode') idOrCode: string) {
     return this.bookingsService.selfCheckIn(idOrCode);
   }
 
-  // PATCH /api/v1/bookings/public/:idOrCode/request-checkout — guest ส่งคำขอเช็คเอาท์
   @Patch('public/:idOrCode/request-checkout')
   requestCheckout(@Param('idOrCode') idOrCode: string) {
     return this.bookingsService.requestCheckout(idOrCode);
   }
 
-  // PATCH /api/v1/bookings/public/:idOrCode/pay-extras — guest ชำระค่าใช้จ่ายเพิ่มเติม
   @Patch('public/:idOrCode/pay-extras')
   payExtraCharges(@Param('idOrCode') idOrCode: string) {
     return this.bookingsService.payExtraCharges(idOrCode);
   }
 
-  // POST /api/v1/bookings/public/:idOrCode/review — submit review หลังเช็คเอาท์
   @Post('public/:idOrCode/review')
   submitReview(
     @Param('idOrCode') idOrCode: string,
@@ -71,7 +64,7 @@ export class BookingsController {
     return this.bookingsService.submitReview(idOrCode, dto);
   }
 
-  // ---------- Admin endpoints (auth required) ----------
+  /* ──────────────── Admin endpoints (auth required) ──────────────── */
 
   @UseGuards(JwtAuthGuard)
   @Get()

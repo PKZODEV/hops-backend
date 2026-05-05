@@ -5,21 +5,36 @@ import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 
+/**
+ * JWT verification strategy.
+ *
+ * Tokens are accepted from two transports:
+ *   1. The HTTP-only `hops_token` cookie used by the admin console.
+ *   2. The `Authorization: Bearer <token>` header used by mobile clients.
+ *
+ * After signature verification we re-fetch the user record so that
+ * de-activated accounts cannot continue to authenticate with a token
+ * issued before they were disabled.
+ */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     config: ConfigService,
     private prisma: PrismaService,
   ) {
+    const secret = config.get<string>('JWT_SECRET');
+    if (!secret) {
+      throw new Error(
+        'JWT_SECRET must be set. Configure it via environment before booting the API.',
+      );
+    }
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
-        // 1. HttpOnly cookie (web admin)
         (req: Request) => req?.cookies?.['hops_token'] ?? null,
-        // 2. Bearer token in Authorization header (mobile app)
         ExtractJwt.fromAuthHeaderAsBearerToken(),
       ]),
       ignoreExpiration: false,
-      secretOrKey: config.get<string>('JWT_SECRET') ?? 'hops-secret-key',
+      secretOrKey: secret,
       passReqToCallback: false,
     });
   }
@@ -37,7 +52,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         vehicleOwnerId: true,
       },
     });
-    if (!user || !user.isActive) throw new UnauthorizedException('บัญชีไม่ได้ใช้งาน');
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('บัญชีไม่ได้ใช้งาน');
+    }
     return user;
   }
 }

@@ -132,7 +132,7 @@ export class PropertiesService {
   }
 
   async create(dto: CreatePropertyDto, user: AuthUser) {
-    // เจ้าของที่พักมีได้แค่โรงแรมเดียว
+    /* Business rule: a HOTEL_OWNER may operate exactly one property. */
     if (user.role === 'HOTEL_OWNER') {
       const existing = await this.prisma.property.count({ where: { userId: user.id } });
       if (existing > 0) {
@@ -196,7 +196,8 @@ export class PropertiesService {
       orderBy: { createdAt: 'desc' },
     });
 
-    // attach review aggregates
+    /* Aggregate review counts/averages once and merge them into the
+       property list rather than running one query per row. */
     const ids = properties.map((p) => p.id);
     const aggregates = ids.length
       ? await this.prisma.review.groupBy({

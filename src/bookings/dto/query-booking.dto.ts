@@ -6,7 +6,7 @@ export class QueryBookingDto {
   @IsEnum(BookingStatus)
   status?: BookingStatus;
 
-  /// 'arriving' | 'in_stay' | 'completed' | 'cancelled'  (mobile tabs)
+  /** Mobile-tab grouping: one of `arriving | in_stay | completed | cancelled`. */
   @IsOptional()
   @IsString()
   group?: string;

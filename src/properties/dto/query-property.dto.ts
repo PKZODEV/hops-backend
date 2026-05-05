@@ -16,7 +16,7 @@ export class QueryPropertyDto {
   @IsString()
   city?: string;
 
-  // full-text search across name, city, address
+  /** Free-text search across `name`, `city` and `address`. */
   @IsOptional()
   @IsString()
   search?: string;

@@ -10,8 +10,9 @@ export enum RoomStatus {
 }
 
 export class CreateRoomUnitDto {
+  /** Operator-facing room number, free-form string (e.g. "101", "201A"). */
   @IsString()
-  number: string; // "101", "201A"
+  number: string;
 
   @IsOptional()
   @IsEnum(RoomStatus)

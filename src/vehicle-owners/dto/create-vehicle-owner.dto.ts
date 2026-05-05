@@ -1,8 +1,9 @@
 import { IsString, IsOptional } from 'class-validator';
 
 export class CreateVehicleOwnerDto {
+  /** Display name of the vehicle queue / owner. */
   @IsString()
-  name: string; // "เจ๊อี๊ดคิวรถแดง", "คิวรถตู้ภูเก็ต"
+  name: string;
 
   @IsOptional()
   @IsString()

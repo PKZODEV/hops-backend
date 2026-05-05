@@ -30,8 +30,14 @@ export class AuthService {
     private config: ConfigService,
   ) {}
 
+  /**
+   * Authenticates an operator (any role except GUEST) and issues a JWT.
+   *
+   * The error message is intentionally identical for "user not found",
+   * "user inactive" and "wrong password" to avoid leaking which emails
+   * are registered.
+   */
   async login(dto: LoginDto) {
-    // Admin login — find non-GUEST users only
     const user = await this.users.findByEmailExcludingRole(dto.email, 'GUEST');
     if (!user || !user.isActive) {
       throw new UnauthorizedException('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
@@ -81,10 +87,12 @@ export class AuthService {
   }
 
   /**
-   * สร้างคำขอลงทะเบียน — ยังไม่เป็น user จนกว่า super admin จะอนุมัติ
+   * Creates a pending registration request. The applicant does not
+   * become a user until a super admin approves the request — this
+   * method only persists the application and rejects duplicates against
+   * both existing users and other pending requests.
    */
   async createRegistrationRequest(dto: RegisterRequestDto) {
-    // ตรวจว่าอีเมล+role ซ้ำใน users หรือ pending requests มั้ย
     const existingUser = await this.prisma.user.findFirst({
       where: { email: dto.email, role: dto.role },
     });
@@ -131,8 +139,13 @@ export class AuthService {
     return { ok: true };
   }
 
-  // ==================== GUEST AUTH (Mobile) ====================
+  /* ──────────────── Guest auth (mobile) ──────────────── */
 
+  /**
+   * Generates a six-digit numeric OTP. Uses `Math.random` because the
+   * OTP is a one-time, short-lived secondary factor; the primary
+   * credential remains the password.
+   */
   private generateOtpCode(): string {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
@@ -142,13 +155,13 @@ export class AuthService {
   }
 
   async guestRegister(dto: GuestRegisterDto) {
-    // Check duplicate email for GUEST role only
     const existing = await this.users.findByEmailAndRole(dto.email, 'GUEST');
     if (existing) {
       throw new ConflictException('อีเมลนี้ถูกใช้งานแล้ว');
     }
 
-    // Create inactive guest user
+    /* The user record is created up front but kept inactive so it
+       cannot log in until the OTP step succeeds. */
     const user = await this.users.create({
       email: dto.email,
       password: dto.password,
@@ -156,14 +169,11 @@ export class AuthService {
       name: dto.name,
       role: 'GUEST',
     });
-
-    // Mark user inactive until OTP verified
     await this.prisma.user.update({
       where: { id: user.id },
       data: { isActive: false },
     });
 
-    // Generate OTP
     const code = this.generateOtpCode();
     const refCode = this.generateRefCode();
     const otp = await this.prisma.otp.create({
@@ -171,11 +181,9 @@ export class AuthService {
         email: dto.email,
         code,
         refCode,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
       },
     });
-
-    // Send OTP email
     await this.mail.sendOtpEmail({ to: dto.email, code, refCode });
 
     return { email: dto.email, refCode: otp.refCode };
@@ -201,20 +209,18 @@ export class AuthService {
       throw new BadRequestException('รหัส OTP ไม่ถูกต้อง');
     }
 
-    // Mark OTP as used
+    /* Burn the OTP first so a concurrent retry cannot reuse it, then
+       flip the user record to active. */
     await this.prisma.otp.update({
       where: { id: otp.id },
       data: { used: true },
     });
-
-    // Activate user
     const user = await this.prisma.user.update({
       where: { email_role: { email: dto.email, role: 'GUEST' } },
       data: { isActive: true },
       select: { id: true, email: true, name: true, role: true, phone: true },
     });
 
-    // Issue JWT
     const token = this.jwt.sign({ sub: user.id, email: user.email });
 
     return {
@@ -229,10 +235,14 @@ export class AuthService {
     };
   }
 
-  // ==================== FORGOT / RESET PASSWORD (Admin) ====================
+  /* ──────────────── Forgot / reset password (admin) ──────────────── */
 
+  /**
+   * Issues a password-reset link. The response body is identical
+   * regardless of whether the email exists; this prevents the endpoint
+   * from being used as an account-enumeration oracle.
+   */
   async forgotPassword(dto: ForgotPasswordDto) {
-    // หา user ที่ไม่ใช่ GUEST (admin side) — ถ้ามีหลาย role ให้เลือกอันแรก
     const user = await this.prisma.user.findFirst({
       where: {
         email: dto.email,
@@ -240,13 +250,12 @@ export class AuthService {
         isActive: true,
       },
     });
-
-    // ไม่เจอก็ตอบเหมือนเจอเพื่อไม่ให้ leak ข้อมูลว่าอีเมลไหนมีในระบบ
     if (!user) {
       return { ok: true };
     }
 
-    // ยกเลิก token เก่าที่ยังไม่ใช้
+    /* Invalidate any outstanding reset tokens for this user so an
+       attacker who somehow obtains a stale link cannot use it. */
     await this.prisma.passwordResetToken.updateMany({
       where: { userId: user.id, used: false },
       data: { used: true },
@@ -257,12 +266,12 @@ export class AuthService {
       data: {
         userId: user.id,
         token,
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 ชั่วโมง
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
       },
     });
 
     const appUrl =
-      this.config.get<string>('APP_URL') ?? 'http://119.59.116.75';
+      this.config.get<string>('APP_URL') ?? 'http://localhost:3000';
     const resetLink = `${appUrl}/reset-password?token=${token}`;
 
     await this.mail.sendPasswordResetEmail({
@@ -302,8 +311,12 @@ export class AuthService {
     return { ok: true };
   }
 
+  /**
+   * Re-issues a pending-account OTP. Refuses to issue once the account
+   * is already verified so this endpoint cannot be used to harass an
+   * existing user with mail spam.
+   */
   async resendOtp(dto: ResendOtpDto) {
-    // Check GUEST user exists and is inactive (pending OTP)
     const user = await this.users.findByEmailAndRole(dto.email, 'GUEST');
     if (!user) {
       throw new BadRequestException('ไม่พบบัญชีผู้ใช้นี้');
@@ -312,13 +325,11 @@ export class AuthService {
       throw new BadRequestException('บัญชีนี้ยืนยันตัวตนแล้ว');
     }
 
-    // Invalidate old OTPs
     await this.prisma.otp.updateMany({
       where: { email: dto.email, used: false },
       data: { used: true },
     });
 
-    // Generate new OTP
     const code = this.generateOtpCode();
     const refCode = this.generateRefCode();
     const otp = await this.prisma.otp.create({

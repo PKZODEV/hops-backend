@@ -9,17 +9,19 @@ import {
 import { Type } from 'class-transformer';
 
 export class CreateRateDto {
+  /** Display label for the rate, e.g. "Standard Rate", "Weekend Rate", "Early Bird". */
   @IsString()
-  name: string; // "Standard Rate", "Weekend Rate", "Early Bird"
+  name: string;
 
   @IsNumber()
   @IsPositive()
   @Type(() => Number)
   price: number;
 
+  /** ISO-4217 currency code. Defaults to THB when omitted. */
   @IsOptional()
   @IsString()
-  currency?: string; // default: THB
+  currency?: string;
 
   @IsOptional()
   @IsDateString()
